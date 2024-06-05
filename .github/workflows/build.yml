@@ -36,7 +36,7 @@ jobs:
     - name: Generating Makefiles
       shell: bash
       run: |
-        if [[ "${{ runner.os }}" == “macOS" ]] ; then
+        if [[ "${{ runner.os }}" == "macOS" ]] ; then
           export enable_ccache=off
         else
           export enable_ccache=on
