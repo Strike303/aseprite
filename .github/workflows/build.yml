@@ -1,57 +1,48 @@
-name: build
-on: [push, pull_request]
+name: Build Aseprite for macOS
+
+on:
+  push:
+    branches:
+      - main  # 触发条件：当 main 分支有新的提交时触发
+  workflow_dispatch:  # 手动触发：可以通过 GitHub Actions 页面手动运行
+
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest]
-        build_type: [Release]
-        enable_ui: [on]
-        include:
-          - os: windows-latest
-            build_type: Release
-            enable_ui: on
+    runs-on: macos-latest  # 执行环境：使用最新的 macOS
+    
     steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1
-      if: runner.os == 'Linux'
-      with:
-        key: ${{ matrix.os }}-${{ matrix.enable_ui }}
-    - uses: seanmiddleditch/gha-setup-ninja@master
-    - uses: ilammy/msvc-dev-cmd@v1
-      if: runner.os == 'Windows'
-    - name: Install Dependencies
-      shell: bash
+    - name: Checkout repository
+      uses: actions/checkout@v2  # 检出仓库到工作目录
+    
+    - name: Update submodules
+      run: git submodule update --init --recursive  # 更新子模块到最新版本
+    
+    - name: Install dependencies
       run: |
-        if [[ "${{ runner.os }}" == "Linux" ]] ; then
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            libx11-dev libxcursor-dev libxi-dev
-        fi
-    - name: Generating Makefiles
-      shell: bash
+        brew update  # 更新 Homebrew
+        brew install cmake ninja
+        brew install skia
+        
+    - name: Configure and build Aseprite
       run: |
-        if [[ "${{ runner.os }}" == "macOS" ]] ; then
-          export enable_ccache=off
-        else
-          export enable_ccache=on
-        fi
-        curl -L https://github.com/blueloveTH/aseprite/releases/download/v0.01/skia.zip --output skia.zip
-        7z x skia.zip
-        cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DENABLE_UI=${{ matrix.enable_ui }} \
-          -DENABLE_CCACHE=$enable_ccache \
+        mkdir build
+        cd build
+        cmake \
+          -DCMAKE_BUILD_TYPE=Release \
           -DLAF_BACKEND=skia \
-          -DSKIA_DIR=./skia \
-          -DSKIA_LIBRARY_DIR=./skia/out/Release-x64 \
-          -DSKIA_LIBRARY=./skia/out/Release-x64/ibskia.a \
-    - name: Compiling
-      shell: bash
+          -DSKIA_DIR=/usr/local/opt/skia \
+          -DSKIA_OUT=/usr/local/opt/skia \
+          ..
+        cmake --build . --target aseprite --config Release
+        
+    - name: Package Aseprite for macOS
       run: |
-        cd build && ninja
+        mkdir -p packaged
+        cp bin/aseprite packaged/
+        # 将其他必要文件（如资源、依赖库等）复制到 packaged 目录
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: aseprite-macos
+        path: packaged
